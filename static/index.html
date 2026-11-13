@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Image Studio</title>
+<style>
+:root {
+  --bg: #ffffff; --bg-side: #f7f7f8; --bg-elev: #ffffff; --bg-bubble: #f0f0f2; --bg-hover: #ececef;
+  --fg: #1d1d1f; --fg-muted: #6e6e76; --fg-faint: #9a9aa2; --border: #e3e3e8;
+  --accent: #1d1d1f; --accent-fg: #ffffff; --danger: #c4372f; --danger-bg: #fdf0ef;
+  --shadow: 0 1px 2px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.06);
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #181818; --bg-side: #121212; --bg-elev: #212121; --bg-bubble: #2a2a2a; --bg-hover: #262626;
+    --fg: #ececec; --fg-muted: #a0a0a0; --fg-faint: #6f6f6f; --border: #2e2e2e;
+    --accent: #ececec; --accent-fg: #181818; --danger: #ff7b72; --danger-bg: #2d1717;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg); color: var(--fg);
+  font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+  display: flex; overflow: hidden;
+}
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+select { font: inherit; color: var(--fg); background: transparent; border: 0; cursor: pointer; padding: 2px 4px; border-radius: 6px; }
+select:hover { background: var(--bg-hover); }
+select option { background: var(--bg-elev); }
+svg { display: block; }
+
+/* Sidebar */
+.side {
+  width: 260px; flex: none; background: var(--bg-side); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; padding: 12px 8px;
+}
+.brand { display: flex; align-items: center; gap: 8px; padding: 4px 8px 12px; font-weight: 600; }
+.brand .dot { width: 18px; height: 18px; border-radius: 5px; background: var(--fg); }
+.new-chat {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; color: var(--fg);
+}
+.new-chat:hover, .chat-item:hover { background: var(--bg-hover); }
+.side-label { font-size: 12px; color: var(--fg-faint); padding: 16px 10px 6px; }
+.chat-list { flex: 1; overflow-y: auto; }
+.chat-item {
+  display: flex; align-items: center; gap: 6px; padding: 7px 10px; border-radius: 8px;
+  color: var(--fg-muted); cursor: pointer;
+}
+.chat-item.active { background: var(--bg-hover); color: var(--fg); }
+.chat-item .t { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.chat-item .del { opacity: 0; padding: 2px; border-radius: 4px; color: var(--fg-faint); }
+.chat-item:hover .del { opacity: 1; }
+.chat-item .del:hover { color: var(--danger); }
+.usage { margin: 8px 2px 0; padding: 10px; border: 1px solid var(--border); border-radius: 10px; font-size: 12px; }
+.usage-head { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; color: var(--fg-muted); }
+.usage-head .plan { flex: 1; font-weight: 600; color: var(--fg); text-transform: capitalize; }
+.usage-row { margin-top: 8px; }
+.usage-row .line { display: flex; justify-content: space-between; color: var(--fg-muted); }
+.usage-row .line b { color: var(--fg); font-weight: 600; }
+.bar { height: 6px; border-radius: 3px; background: var(--bg-hover); margin: 4px 0 2px; overflow: hidden; }
+.bar > i { display: block; height: 100%; border-radius: 3px; background: var(--fg); transition: width .3s; }
+.bar.warn > i { background: #d4a017; }
+.bar.low > i { background: var(--danger); }
+.usage-row .reset { color: var(--fg-faint); font-size: 11px; }
+.usage .note { color: var(--fg-faint); font-size: 11px; margin-top: 8px; }
+.usage .note.err { color: var(--danger); }
+.side-foot { font-size: 12px; color: var(--fg-faint); padding: 8px 10px 0; word-break: break-all; }
+.side-foot code { font-family: var(--mono); font-size: 11px; }
+
+/* Main */
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
+.topbar {
+  height: 48px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+}
+.topbar .title { flex: 1; font-weight: 500; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.menu-btn { display: none; padding: 6px; border-radius: 6px; }
+.menu-btn:hover { background: var(--bg-hover); }
+.thread { flex: 1; overflow-y: auto; }
+.thread-inner { max-width: 780px; margin: 0 auto; padding: 24px 16px 32px; }
+.empty { text-align: center; color: var(--fg-muted); padding-top: 18vh; }
+.empty h1 { font-size: 22px; font-weight: 600; color: var(--fg); margin: 0 0 6px; }
+
+.msg { margin: 0 0 22px; }
+.msg.user { display: flex; flex-direction: column; align-items: flex-end; }
+.msg.user .bubble {
+  background: var(--bg-bubble); padding: 10px 14px; border-radius: 16px; max-width: 85%;
+  white-space: pre-wrap; word-wrap: break-word;
+}
+.msg.user .thumbs { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; margin-bottom: 6px; max-width: 85%; }
+.msg.user .thumbs img { width: 72px; height: 72px; object-fit: cover; border-radius: 10px; border: 1px solid var(--border); cursor: zoom-in; }
+.msg.assistant .text { white-space: pre-wrap; word-wrap: break-word; }
+.status { display: flex; align-items: center; gap: 8px; color: var(--fg-muted); }
+.shimmer {
+  background: linear-gradient(90deg, var(--fg-faint) 0%, var(--fg) 50%, var(--fg-faint) 100%);
+  background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: shimmer 1.6s linear infinite;
+}
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.renders { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; margin-top: 10px; }
+.render { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--bg-elev); }
+.render img { width: 100%; display: block; cursor: zoom-in; }
+.render.partial img { filter: blur(6px); transform: scale(1.03); cursor: default; }
+.render .meta { display: flex; align-items: center; gap: 6px; padding: 6px 8px; font-size: 12px; color: var(--fg-muted); }
+.render .meta .name { flex: 1; font-family: var(--mono); font-size: 11px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.icon-btn { padding: 4px; border-radius: 6px; color: var(--fg-muted); }
+.icon-btn:hover { background: var(--bg-hover); color: var(--fg); }
+.error { background: var(--danger-bg); color: var(--danger); padding: 10px 12px; border-radius: 10px; margin-top: 8px; white-space: pre-wrap; word-break: break-word; font-size: 13px; }
+
+/* Composer */
+.composer-wrap { flex: none; padding: 0 16px 16px; }
+.composer {
+  max-width: 780px; margin: 0 auto; background: var(--bg-elev); border: 1px solid var(--border);
+  border-radius: 20px; box-shadow: var(--shadow); padding: 10px 10px 8px;
+}
+.attachments { display: flex; flex-wrap: wrap; gap: 8px; padding: 2px 4px 8px; }
+.attachments:empty { display: none; }
+.att { position: relative; width: 60px; height: 60px; }
+.att img { width: 100%; height: 100%; object-fit: cover; border-radius: 10px; border: 1px solid var(--border); }
+.att button {
+  position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%;
+  background: var(--fg); color: var(--bg); display: grid; place-items: center;
+}
+textarea {
+  width: 100%; resize: none; border: 0; outline: none; background: transparent; color: var(--fg);
+  font: inherit; font-size: 15px; padding: 4px 6px; max-height: 220px; min-height: 26px;
+}
+textarea::placeholder { color: var(--fg-faint); }
+.controls { display: flex; align-items: center; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
+.controls .spacer { flex: 1; }
+.controls select { font-size: 13px; color: var(--fg-muted); }
+.send {
+  width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: var(--accent-fg);
+  display: grid; place-items: center;
+}
+.send:disabled { opacity: .3; cursor: default; }
+.hint { max-width: 780px; margin: 6px auto 0; text-align: center; font-size: 12px; color: var(--fg-faint); }
+
+.drop {
+  position: absolute; inset: 0; background: color-mix(in srgb, var(--bg) 85%, transparent);
+  border: 2px dashed var(--fg-muted); border-radius: 16px; margin: 8px;
+  display: none; place-items: center; font-size: 16px; color: var(--fg); z-index: 5; pointer-events: none;
+}
+.drop.on { display: grid; }
+.lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: none; place-items: center; z-index: 10; cursor: zoom-out; }
+.lightbox.on { display: grid; }
+.lightbox img { max-width: 94vw; max-height: 94vh; border-radius: 8px; }
+
+@media (max-width: 760px) {
+  .side { position: fixed; inset: 0 auto 0 0; z-index: 8; transform: translateX(-100%); transition: transform .2s; box-shadow: var(--shadow); }
+  .side.open { transform: none; }
+  .menu-btn { display: block; }
+  .renders { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<aside class="side" id="side">
+  <div class="brand"><span class="dot"></span>Image Studio</div>
+  <button class="new-chat" id="newChat">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+    Đoạn chat mới
+  </button>
+  <div class="side-label">Gần đây</div>
+  <div class="chat-list" id="chatList"></div>
+  <div class="usage" id="usage">
+    <div class="usage-head">
+      <span class="plan" id="usagePlan">Hạn mức</span>
+      <button class="icon-btn" id="usageRefresh" title="Làm mới">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+      </button>
+    </div>
+    <div id="usageBody"><div class="note">Đang tải…</div></div>
+  </div>
+  <div class="side-foot">Lưu ảnh vào<br><code id="outDir">…</code></div>
+</aside>
+
+<main class="main" id="main">
+  <div class="topbar">
+    <button class="menu-btn" id="menuBtn" aria-label="Menu">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <div class="title" id="title">Đoạn chat mới</div>
+  </div>
+
+  <div class="thread" id="thread"><div class="thread-inner" id="threadInner"></div></div>
+
+  <div class="composer-wrap">
+    <div class="composer">
+      <div class="attachments" id="attachments"></div>
+      <textarea id="input" rows="1" placeholder="Mô tả ảnh muốn tạo, hoặc đính kèm ảnh để chỉnh sửa…"></textarea>
+      <div class="controls">
+        <button class="icon-btn" id="attachBtn" title="Đính kèm ảnh">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <input type="file" id="fileInput" accept="image/*" multiple hidden>
+        <select id="model" title="Model"></select>
+        <select id="size" title="Kích thước">
+          <option value="auto">Tự động</option>
+          <option value="1024x1024">Vuông 1024×1024</option>
+          <option value="1536x1024">Ngang 1536×1024</option>
+          <option value="1024x1536">Dọc 1024×1536</option>
+        </select>
+        <select id="quality" title="Chất lượng">
+          <option value="auto">Chất lượng: tự động</option>
+          <option value="low">Thấp</option>
+          <option value="medium">Trung bình</option>
+          <option value="high">Cao</option>
+        </select>
+        <span class="spacer"></span>
+        <button class="send" id="sendBtn" title="Gửi (Enter)" disabled>
+          <svg id="sendIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="hint">Enter để gửi · Shift+Enter xuống dòng · Kéo thả hoặc dán ảnh để đính kèm</div>
+  </div>
+  <div class="drop" id="drop">Thả ảnh vào đây</div>
+</main>
+<div class="lightbox" id="lightbox"><img id="lightboxImg" alt=""></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const STORE_KEY = "imageStudio.chats.v1";
+const PREFS_KEY = "imageStudio.prefs.v1";
+const MAX_SIDE = 2048;   // uploads are downscaled to this before sending
+const THUMB_SIDE = 192;  // thumbnails kept in local history
+
+const ICON_STOP = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
+const ICON_SEND = $("sendIcon").outerHTML;
+const ICON_DL = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 4v12M6 10l6 6 6-6M5 20h14"/></svg>';
+const ICON_COPY = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>';
+const ICON_X = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+
+let chats = load(STORE_KEY, []);
+let currentId = null;
+let pending = [];          // [{full: dataURL, thumb: dataURL}]
+let controller = null;
+
+function load(key, fallback) {
+  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
+}
+function save(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); }
+  catch { console.warn("localStorage is full or unavailable; history not saved"); }
+}
+const persist = () => save(STORE_KEY, chats);
+const current = () => chats.find(c => c.id === currentId);
+const esc = (s) => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+/* ---------- Config ---------- */
+async function init() {
+  const prefs = load(PREFS_KEY, {});
+  try {
+    const cfg = await (await fetch("/api/config")).json();
+    $("outDir").textContent = cfg.out_dir;
+    for (const m of cfg.models) $("model").add(new Option(m, m));
+    $("model").value = cfg.models.includes(prefs.model) ? prefs.model : cfg.default_model;
+  } catch {
+    $("outDir").textContent = "(server không phản hồi)";
+  }
+  if (prefs.size) $("size").value = prefs.size;
+  if (prefs.quality) $("quality").value = prefs.quality;
+  for (const id of ["model", "size", "quality"]) {
+    $(id).addEventListener("change", () =>
+      save(PREFS_KEY, { model: $("model").value, size: $("size").value, quality: $("quality").value }));
+  }
+  openChat(chats[0]?.id ?? null);
+}
+
+/* ---------- Sidebar ---------- */
+function renderList() {
+  const list = $("chatList");
+  list.innerHTML = "";
+  for (const c of chats) {
+    const el = document.createElement("div");
+    el.className = "chat-item" + (c.id === currentId ? " active" : "");
+    el.innerHTML = `<span class="t">${esc(c.title)}</span><button class="del" title="Xoá">${ICON_X}</button>`;
+    el.onclick = () => { openChat(c.id); $("side").classList.remove("open"); };
+    el.querySelector(".del").onclick = (e) => {
+      e.stopPropagation();
+      chats = chats.filter(x => x.id !== c.id);
+      persist();
+      openChat(currentId === c.id ? (chats[0]?.id ?? null) : currentId);
+    };
+    list.appendChild(el);
+  }
+}
+
+function openChat(id) {
+  if (controller) return;  // don't switch mid-generation
+  currentId = id;
+  renderList();
+  renderThread();
+}
+
+/* ---------- Thread ---------- */
+function renderThread() {
+  const chat = current();
+  $("title").textContent = chat?.title ?? "Đoạn chat mới";
+  const inner = $("threadInner");
+  inner.innerHTML = "";
+  if (!chat || !chat.messages.length) {
+    inner.innerHTML = `<div class="empty"><h1>Bạn muốn tạo ảnh gì?</h1>
+      <div>Mô tả bằng lời, hoặc đính kèm một hay nhiều ảnh làm mẫu để chỉnh sửa.</div></div>`;
+    return;
+  }
+  for (const m of chat.messages) inner.appendChild(messageEl(m));
+  scrollDown();
+}
+
+function messageEl(m) {
+  const el = document.createElement("div");
+  el.className = "msg " + m.role;
+  if (m.role === "user") {
+    if (m.thumbs?.length) {
+      const t = document.createElement("div");
+      t.className = "thumbs";
+      for (const src of m.thumbs) {
+        const img = new Image(); img.src = src; img.onclick = () => zoom(src);
+        t.appendChild(img);
+      }
+      el.appendChild(t);
+    }
+    if (m.text) {
+      const b = document.createElement("div");
+      b.className = "bubble"; b.textContent = m.text;
+      el.appendChild(b);
+    }
+  } else {
+    fillAssistant(el, m);
+  }
+  return el;
+}
+
+function fillAssistant(el, m) {
+  el.innerHTML = "";
+  if (m.text) {
+    const t = document.createElement("div");
+    t.className = "text"; t.textContent = m.text;
+    el.appendChild(t);
+  }
+  if (m.status) {
+    const s = document.createElement("div");
+    s.className = "status";
+    s.innerHTML = `<span class="shimmer">${esc(m.status)}</span>`;
+    el.appendChild(s);
+  }
+  if (m.renders?.length || m.partial) {
+    const grid = document.createElement("div");
+    grid.className = "renders";
+    for (const r of m.renders ?? []) grid.appendChild(renderCard(r));
+    if (m.partial) {
+      const card = document.createElement("div");
+      card.className = "render partial";
+      card.innerHTML = `<img src="${m.partial}" alt="">`;
+      grid.appendChild(card);
+    }
+    el.appendChild(grid);
+  }
+  if (m.error) {
+    const e = document.createElement("div");
+    e.className = "error"; e.textContent = m.error;
+    el.appendChild(e);
+  }
+}
+
+function renderCard(r) {
+  const card = document.createElement("div");
+  card.className = "render";
+  card.innerHTML = `<img src="${r.url}" alt="" loading="lazy">
+    <div class="meta"><span class="name" title="${esc(r.path)}">${esc(r.name)}</span>
+    <button class="icon-btn" data-act="copy" title="Copy đường dẫn">${ICON_COPY}</button>
+    <a class="icon-btn" href="${r.url}" download="${esc(r.name)}" title="Tải về">${ICON_DL}</a></div>`;
+  card.querySelector("img").onclick = () => zoom(r.url);
+  card.querySelector('[data-act="copy"]').onclick = () => navigator.clipboard?.writeText(r.path);
+  return card;
+}
+
+function scrollDown() { const t = $("thread"); t.scrollTop = t.scrollHeight; }
+function zoom(src) { $("lightboxImg").src = src; $("lightbox").classList.add("on"); }
+$("lightbox").onclick = () => $("lightbox").classList.remove("on");
+
+/* ---------- Attachments ---------- */
+function readImage(file, maxSide, type, quality) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL(type, quality));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Không đọc được ảnh " + file.name)); };
+    img.src = url;
+  });
+}
+
+async function addFiles(files) {
+  for (const f of files) {
+    if (!f.type.startsWith("image/")) continue;
+    try {
+      const fullType = f.type === "image/png" ? "image/png" : "image/jpeg";
+      const [full, thumb] = await Promise.all([
+        readImage(f, MAX_SIDE, fullType, 0.92),
+        readImage(f, THUMB_SIDE, "image/jpeg", 0.8),
+      ]);
+      pending.push({ full, thumb });
+    } catch (e) { console.warn(e); }
+  }
+  renderAttachments();
+}
+
+function renderAttachments() {
+  const box = $("attachments");
+  box.innerHTML = "";
+  pending.forEach((p, i) => {
+    const el = document.createElement("div");
+    el.className = "att";
+    el.innerHTML = `<img src="${p.thumb}" alt=""><button title="Bỏ">${ICON_X}</button>`;
+    el.querySelector("button").onclick = () => { pending.splice(i, 1); renderAttachments(); };
+    box.appendChild(el);
+  });
+  updateSend();
+}
+
+$("attachBtn").onclick = () => $("fileInput").click();
+$("fileInput").onchange = (e) => { addFiles([...e.target.files]); e.target.value = ""; };
+$("input").addEventListener("paste", (e) => {
+  const files = [...(e.clipboardData?.files ?? [])].filter(f => f.type.startsWith("image/"));
+  if (files.length) { e.preventDefault(); addFiles(files); }
+});
+let dragDepth = 0;
+$("main").addEventListener("dragenter", (e) => { if (e.dataTransfer.types.includes("Files")) { dragDepth++; $("drop").classList.add("on"); } });
+$("main").addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; $("drop").classList.remove("on"); } });
+$("main").addEventListener("dragover", (e) => e.preventDefault());
+$("main").addEventListener("drop", (e) => {
+  e.preventDefault(); dragDepth = 0; $("drop").classList.remove("on");
+  addFiles([...e.dataTransfer.files]);
+});
+
+/* ---------- Composer ---------- */
+const input = $("input");
+function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 220) + "px"; }
+function updateSend() {
+  const btn = $("sendBtn");
+  if (controller) { btn.disabled = false; btn.innerHTML = ICON_STOP; btn.title = "Dừng"; return; }
+  btn.innerHTML = ICON_SEND; btn.title = "Gửi (Enter)";
+  btn.disabled = !input.value.trim() && !pending.length;
+}
+input.addEventListener("input", () => { autosize(); updateSend(); });
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); if (!controller) send(); }
+});
+$("sendBtn").onclick = () => controller ? controller.abort() : send();
+$("newChat").onclick = () => { openChat(null); $("side").classList.remove("open"); input.focus(); };
+$("menuBtn").onclick = () => $("side").classList.toggle("open");
+
+/* ---------- Generation ---------- */
+async function send() {
+  const text = input.value.trim();
+  if (!text && !pending.length) return;
+
+  let chat = current();
+  if (!chat) {
+    chat = { id: crypto.randomUUID(), title: (text || "Chỉnh sửa ảnh").slice(0, 60), messages: [] };
+    chats.unshift(chat);
+    currentId = chat.id;
+  } else {
+    chats = [chat, ...chats.filter(c => c !== chat)];  // move to top
+  }
+
+  // Context for the server: earlier turns as text, plus the latest renders for follow-up edits.
+  const history = chat.messages.map(m => ({
+    role: m.role,
+    text: m.role === "assistant" && m.renders?.length
+      ? [m.text, `[Generated ${m.renders.length} image(s)]`].filter(Boolean).join(" ")
+      : (m.text || ""),
+  }));
+  const lastWithRenders = [...chat.messages].reverse().find(m => m.renders?.length);
+  const body = {
+    prompt: text,
+    images: pending.map(p => p.full),
+    history,
+    previous_renders: lastWithRenders ? lastWithRenders.renders.map(r => r.name) : [],
+    model: $("model").value,
+    size: $("size").value,
+    quality: $("quality").value,
+  };
+
+  chat.messages.push({ role: "user", text, thumbs: pending.map(p => p.thumb) });
+  const reply = { role: "assistant", text: "", renders: [], status: "Đang suy nghĩ…" };
+  chat.messages.push(reply);
+  pending = []; input.value = ""; autosize(); renderAttachments();
+  renderList(); renderThread();
+  const replyEl = $("threadInner").lastElementChild;
+  const repaint = () => { fillAssistant(replyEl, reply); scrollDown(); };
+
+  controller = new AbortController();
+  updateSend();
+  try {
+    const res = await fetch("/api/generate", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body), signal: controller.signal,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (line) handleEvent(reply, JSON.parse(line));
+      }
+      repaint();
+    }
+    if (!reply.renders.length && !reply.text && !reply.error) reply.error = "Không nhận được ảnh nào.";
+  } catch (e) {
+    reply.error = e.name === "AbortError" ? "Đã dừng." : (e.message || String(e));
+  } finally {
+    reply.status = null; reply.partial = null;
+    controller = null;
+    persist(); repaint(); updateSend();
+    loadUsage();
+  }
+}
+
+function handleEvent(reply, ev) {
+  switch (ev.type) {
+    case "status": reply.status = "Đang tạo ảnh…"; break;
+    case "text": reply.text += ev.delta; break;
+    case "partial": reply.partial = ev.data_url; reply.status = "Đang tạo ảnh…"; break;
+    case "image":
+      reply.partial = null;
+      reply.renders.push({ name: ev.name, url: ev.url, path: ev.path });
+      reply.status = null;
+      break;
+    case "error": reply.error = ev.message; break;
+  }
+}
+
+/* ---------- Usage ---------- */
+function windowLabel(seconds, fallback) {
+  if (!seconds) return fallback;
+  const h = seconds / 3600;
+  return h >= 24 ? `Cửa sổ ${Math.round(h / 24)} ngày` : `Cửa sổ ${Math.round(h)} giờ`;
+}
+function resetText(ts) {
+  if (!ts) return "";
+  const d = new Date(ts * 1000);
+  const mins = Math.max(0, Math.round((d - Date.now()) / 60000));
+  const left = mins >= 1440 ? `${Math.floor(mins / 1440)} ngày ${Math.floor(mins % 1440 / 60)} giờ`
+             : mins >= 60 ? `${Math.floor(mins / 60)} giờ ${mins % 60} phút` : `${mins} phút`;
+  const pad = (n) => String(n).padStart(2, "0");
+  const when = `${pad(d.getHours())}:${pad(d.getMinutes())} ngày ${d.getDate()}/${d.getMonth() + 1}`;
+  return `Làm mới lúc ${when} (còn ${left})`;
+}
+function usageRow(w, fallback) {
+  if (!w) return "";
+  const left = Math.max(0, Math.min(100, 100 - (w.used_percent ?? 0)));
+  const cls = left <= 10 ? "low" : left <= 30 ? "warn" : "";
+  return `<div class="usage-row">
+    <div class="line"><span>${windowLabel(w.window_seconds, fallback)}</span><span>Còn <b>${left}%</b></span></div>
+    <div class="bar ${cls}"><i style="width:${left}%"></i></div>
+    <div class="reset">${resetText(w.reset_at)}</div></div>`;
+}
+let usageData = null;
+function paintUsage() {
+  const u = usageData;
+  if (!u) return;
+  $("usagePlan").textContent = u.plan_type ? `Gói ${u.plan_type}` : "Hạn mức";
+  let html = usageRow(u.primary, "Ngắn hạn") + usageRow(u.secondary, "Dài hạn");
+  if (u.limit_reached) html += `<div class="note err">Đã chạm hạn mức, chờ đến giờ làm mới.</div>`;
+  if (u.credits_unlimited) html += `<div class="note">Credits: không giới hạn</div>`;
+  else if (u.credits_balance && Number(u.credits_balance) > 0) html += `<div class="note">Credits: ${esc(String(u.credits_balance))}</div>`;
+  $("usageBody").innerHTML = html || `<div class="note">Không có dữ liệu hạn mức.</div>`;
+}
+async function loadUsage() {
+  try {
+    const res = await fetch("/api/usage");
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    usageData = data;
+    paintUsage();
+  } catch (e) {
+    $("usageBody").innerHTML = `<div class="note err">${esc(e.message || String(e))}</div>`;
+  }
+}
+$("usageRefresh").onclick = loadUsage;
+setInterval(loadUsage, 60000);   // refresh numbers every minute
+setInterval(paintUsage, 30000);  // keep the countdown current between fetches
+
+init();
+loadUsage();
+</script>
+</body>
+</html>
